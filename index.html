@@ -27,7 +27,7 @@
       margin-top: 15px;
     }
 
-    button {
+    button, select {
       font-size: 1rem;
       padding: 10px 14px;
       margin-right: 10px;
@@ -37,6 +37,12 @@
       background-color: #007bff;
       color: white;
       border-radius: 4px;
+    }
+
+    select {
+      background-color: white;
+      color: black;
+      border: 1px solid #007bff;
     }
 
     .result {
@@ -79,6 +85,11 @@
 </head>
 <body>
   <h1>Label Scanner</h1>
+
+  <!-- ✅ Camera Selector -->
+  <label for="cameraSelect">Choose Camera:</label>
+  <select id="cameraSelect"></select>
+
   <video id="video" autoplay playsinline></video>
   <canvas id="canvas"></canvas>
 
@@ -98,7 +109,7 @@
   <h2>Scan History</h2>
   <div id="history"></div>
 
-  <!-- ✅ Updated Tesseract.js -->
+  <!-- ✅ Latest Tesseract -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.1/dist/tesseract.min.js"></script>
 
   <script>
@@ -113,21 +124,67 @@
     const matchOutput = document.getElementById("matchOutput");
     const history = document.getElementById("history");
     const status = document.getElementById("status");
+    const cameraSelect = document.getElementById("cameraSelect");
 
     const knownLabels = ["CE", "FCC", "UKCA", "UL", "CSA", "RoHS"];
     let currentImageBlob = null;
+    let currentStream = null;
 
-    // ✅ Start camera
-    navigator.mediaDevices.getUserMedia({ video: true })
-      .then(stream => {
-        video.srcObject = stream;
-      })
-      .catch(err => {
-        console.error("Error accessing camera:", err);
-        alert("Camera access failed.");
+    // ✅ Get camera devices
+    async function getCameraDevices() {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === "videoinput");
+
+      cameraSelect.innerHTML = "";
+      videoDevices.forEach((device, index) => {
+        const option = document.createElement("option");
+        option.value = device.deviceId;
+        option.text = device.label || `Camera ${index + 1}`;
+        cameraSelect.appendChild(option);
       });
 
-    // ✅ Capture image from video
+      return videoDevices;
+    }
+
+    // ✅ Start video stream from selected camera
+    async function startCamera(deviceId) {
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+      }
+
+      try {
+        const constraints = {
+          video: {
+            deviceId: deviceId ? { exact: deviceId } : undefined,
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        };
+
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = stream;
+        currentStream = stream;
+        status.textContent = "Camera started.";
+      } catch (error) {
+        console.error("Camera error:", error);
+        alert("Failed to access camera.");
+      }
+    }
+
+    // ✅ Initial setup
+    async function initCamera() {
+      const devices = await getCameraDevices();
+      if (devices.length > 0) {
+        await startCamera(devices[0].deviceId);
+      } else {
+        alert("No camera found.");
+      }
+    }
+
+    cameraSelect.addEventListener("change", () => {
+      startCamera(cameraSelect.value);
+    });
+
     captureBtn.addEventListener("click", () => {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -138,7 +195,6 @@
       }, "image/jpeg");
     });
 
-    // ✅ Analyze captured image
     analyzeBtn.addEventListener("click", async () => {
       if (!currentImageBlob) {
         alert("Please capture an image first.");
@@ -155,7 +211,6 @@
         const imageUrl = URL.createObjectURL(currentImageBlob);
         const { data: { text } } = await worker.recognize(imageUrl);
         URL.revokeObjectURL(imageUrl);
-
         await worker.terminate();
 
         textOutput.textContent = text.trim();
@@ -177,7 +232,6 @@
           matchOutput.innerHTML = "<em>No known labels detected.</em>";
         }
 
-        // ✅ Save to history
         const entry = document.createElement("div");
         entry.className = "history-item";
         entry.innerHTML = `
@@ -186,7 +240,6 @@
           <strong>Matches:</strong> ${matched.join(", ") || "None"}
         `;
         history.prepend(entry);
-
         status.textContent = "Analysis complete.";
       } catch (err) {
         console.error("[OCR Error]", err);
@@ -195,7 +248,6 @@
       }
     });
 
-    // ✅ Clear history
     clearBtn.addEventListener("click", () => {
       history.innerHTML = "";
       result.style.display = "none";
@@ -203,6 +255,9 @@
       matchOutput.innerHTML = "";
       status.textContent = "";
     });
+
+    // ✅ Start camera when page loads
+    initCamera();
   </script>
 </body>
 </html>
