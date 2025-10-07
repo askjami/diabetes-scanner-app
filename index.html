@@ -11,22 +11,18 @@
       background: #f4f4f4;
       color: #333;
     }
-
     video {
       width: 100%;
       max-width: 600px;
       border: 2px solid #333;
       border-radius: 8px;
     }
-
     canvas {
       display: none;
     }
-
     .controls {
       margin-top: 15px;
     }
-
     button {
       font-size: 1rem;
       padding: 10px 16px;
@@ -37,7 +33,6 @@
       color: white;
       border-radius: 4px;
     }
-
     .result {
       margin-top: 20px;
       background: #fff;
@@ -46,7 +41,6 @@
       border-radius: 6px;
       font-size: 1rem;
     }
-
     .match span {
       display: inline-block;
       background: #28a745;
@@ -56,7 +50,6 @@
       font-size: 0.9rem;
       margin: 4px 4px 0 0;
     }
-
     .history-item {
       background: #eee;
       padding: 10px;
@@ -64,7 +57,6 @@
       border-left: 4px solid #007bff;
       font-size: 1rem;
     }
-
     #status {
       margin-top: 10px;
       font-weight: bold;
@@ -73,7 +65,6 @@
 </head>
 <body>
   <h1>Label Scanner</h1>
-
   <video id="video" autoplay playsinline></video>
   <canvas id="canvas"></canvas>
 
@@ -96,20 +87,24 @@
   <h2>Scan History</h2>
   <div id="history"></div>
 
+  <!-- Tesseract.js from CDN -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.1/dist/tesseract.min.js"></script>
 
   <script>
     const video = document.getElementById("video");
     const canvas = document.getElementById("canvas");
     const context = canvas.getContext("2d");
+
     const captureBtn = document.getElementById("captureBtn");
     const analyzeBtn = document.getElementById("analyzeBtn");
     const clearBtn = document.getElementById("clearBtn");
+
     const result = document.getElementById("result");
     const textOutput = document.getElementById("textOutput");
     const matchOutput = document.getElementById("matchOutput");
     const history = document.getElementById("history");
     const status = document.getElementById("status");
+
     const frontBtn = document.getElementById("frontBtn");
     const backBtn = document.getElementById("backBtn");
 
@@ -117,22 +112,19 @@
     let currentImageBlob = null;
     let currentStream = null;
 
-    // Start video stream
     async function startCamera(facingMode) {
       if (currentStream) {
         currentStream.getTracks().forEach(track => track.stop());
       }
-
       try {
         const constraints = {
           video: {
-            facingMode: { exact: facingMode }, // "user" or "environment"
+            facingMode: { exact: facingMode },
             width: { ideal: 1280 },
             height: { ideal: 720 }
           },
           audio: false
         };
-
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         video.srcObject = stream;
         currentStream = stream;
@@ -140,13 +132,11 @@
       } catch (error) {
         console.error("Camera error:", error);
         status.textContent = `Failed to start ${facingMode} camera. Trying default camera.`;
-
-        // Try default camera
         try {
           const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
           video.srcObject = fallbackStream;
           currentStream = fallbackStream;
-          status.textContent = `Default camera started.`;
+          status.textContent = "Default camera started.";
         } catch (err) {
           status.textContent = "Camera not available.";
           alert("Unable to access camera.");
@@ -155,9 +145,9 @@
     }
 
     // Initial camera setup
-    startCamera("environment"); // Start with back camera by default
+    startCamera("environment");
 
-    // Switch camera
+    // Camera switch buttons
     frontBtn.addEventListener("click", () => startCamera("user"));
     backBtn.addEventListener("click", () => startCamera("environment"));
 
@@ -178,8 +168,14 @@
       }
 
       status.textContent = "Analyzing...";
+
       try {
-        const worker = Tesseract.createWorker();
+        const worker = Tesseract.createWorker({
+          workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5.0.1/dist/worker.min.js',
+          corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0/tesseract-core.wasm.js',
+          logger: m => console.log(m), // Optional
+        });
+
         await worker.load();
         await worker.loadLanguage("eng");
         await worker.initialize("eng");
@@ -187,6 +183,7 @@
         const imageUrl = URL.createObjectURL(currentImageBlob);
         const { data: { text } } = await worker.recognize(imageUrl);
         URL.revokeObjectURL(imageUrl);
+
         await worker.terminate();
 
         textOutput.textContent = text.trim();
@@ -210,12 +207,9 @@
 
         const entry = document.createElement("div");
         entry.className = "history-item";
-        entry.innerHTML = `
-          <strong>Text:</strong><br>
-          <pre>${text.trim()}</pre>
-          <strong>Matches:</strong> ${matched.join(", ") || "None"}
-        `;
+        entry.innerHTML = `<strong>Text:</strong><br><pre>${text.trim()}</pre><strong>Matches:</strong> ${matched.join(", ") || "None"}`;
         history.prepend(entry);
+
         status.textContent = "Analysis complete.";
       } catch (err) {
         console.error("[OCR Error]", err);
